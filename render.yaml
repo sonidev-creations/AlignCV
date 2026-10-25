@@ -14,10 +14,6 @@ services:
         sync: false
       - key: GROQ_MODEL
         value: openai/gpt-oss-20b
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash
       - key: FRONTEND_ORIGIN
         sync: false
       - key: ENABLE_MINILM
