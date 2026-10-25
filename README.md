@@ -1,5 +1,7 @@
 # AlignCV
 
+Live application: [AlignCV on Render](https://aligncv-web.onrender.com) | [API health](https://aligncv-api-13t3.onrender.com/api/health)
+
 AlignCV provides evidence-backed resume insights, helping job seekers strengthen their applications and recruiters assess alignment with role requirements.
 
 ## Features
@@ -55,7 +57,7 @@ flowchart TD
 - **RAG is enabled by default:** passages target 850 characters with 120-character overlap; up to five relevant passages are selected from at most 100 chunks.
 - **Default retrieval:** keyword overlap. Optional MiniLM uses normalized embeddings and cosine similarity, with keyword fallback.
 - **Model input:** the full resume plus retrieved passages, settings, and optional job description. Disabling RAG skips retrieval while retaining the full resume.
-- **Evidence checks:** quotations are checked against normalized source text; populated fields without verifiable evidence are cleared and marked uncertain.
+- **Evidence checks:** quotations are checked against normalized source text; populated fields without verifiable evidence are cleared and marked uncertain. Omitted work history can be recovered verbatim from explicit experience sections; projects are never converted into employment. Extracted skills are checked individually against the source.
 - **Artwork:** requested separately; only predefined skill-category names are sent to Cloudflare.
 
 ## Setup and execution
@@ -114,6 +116,8 @@ Create backend variables in `backend/.env` and frontend variables in `frontend/.
 | `CLOUDFLARE_API_TOKEN` | Backend | Required only for artwork; Workers AI Read permission |
 | `VITE_API_URL` | Frontend | API origin; localhost for development, HTTPS for production; no `/api` path or trailing slash |
 
+Production URLs: `FRONTEND_ORIGIN=https://aligncv-web.onrender.com` and `VITE_API_URL=https://aligncv-api-13t3.onrender.com`.
+
 Changes to `VITE_API_URL` require a frontend rebuild. No real credentials are included in this README.
 
 ## Testing
@@ -127,7 +131,7 @@ From `backend`:
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-The suite contains **38 tests** covering extraction, chunking, retrieval, evidence checks, scoring, JSON recovery, API behavior, and artwork caching/validation. Provider calls are mocked; these tests do not verify live credentials or quotas.
+The suite contains **58 tests** covering extraction, chunking, retrieval, evidence checks, scoring, JSON recovery, API behavior, and artwork caching/validation. Provider calls are mocked; these tests do not verify live credentials or quotas. Regression cases cover experience section boundaries, unavailable comparisons, skill hallucinations, C/C++/C# distinctions, gender-neutral output, and explicit rate-limit errors.
 
 From `frontend`, with `VITE_API_URL` configured:
 
@@ -159,7 +163,7 @@ npm run build
 | Job match estimate | Essential requirements weigh 3, preferred requirements 1; met earns full credit, partial 40%, missing zero |
 | ATS readability | Checks extracted text, supported contact fields, headings, and replacement characters |
 
-Missing essential requirements cap job match at 59%; partial essentials cap it at 79% when no essential is missing. AI assessments and quotation matching can still be incorrect. These review aids are not an employer ATS score or a guarantee of factual accuracy.
+A missing model comparison returns an unavailable score, rather than treating unassessed requirements as zero. Keyword recovery for work experience earns partial credit only and cannot prove years or seniority. Missing essential requirements cap job match at 59%; partial essentials cap it at 79% when no essential is missing. AI assessments and quotation matching can still be incorrect. These review aids are not an employer ATS score or a guarantee of factual accuracy.
 
 ## Deployment
 
