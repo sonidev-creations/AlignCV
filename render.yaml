@@ -1,5 +1,3 @@
-# Create both services via Render > New > Blueprint.
-# Enter the final HTTPS frontend/API URLs when prompted; secrets stay in Render.
 services:
   - type: web
     name: aligncv-api
