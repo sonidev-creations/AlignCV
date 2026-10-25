@@ -17,7 +17,7 @@ from threading import Lock
 from groq import Groq, APIConnectionError, APITimeoutError, APIStatusError
 from pydantic import ValidationError
 
-from .schemas import AnalysisResult, EvidenceField
+from .schemas import AnalysisResult, EvidenceField, JobRequirement
 from .skills_image import SkillsImageRequest, generate_skills_image
 
 APP_DIR = Path(__file__).resolve().parent.parent
@@ -529,6 +529,37 @@ def _technical_requirement_evidence(source: str, requirement: str) -> tuple[list
     return selected, matched_terms, total_terms
 
 
+def _experience_requirement_evidence(source: str, requirement: str) -> tuple[list[str], int, int]:
+    """Match experience requirements only against verbatim lines in the resume's experience section."""
+    terms = _requirement_terms(requirement)
+    if not terms:
+        return [], 0, 0
+    lines = source.splitlines()
+    start = next((i for i, line in enumerate(lines) if re.search(r"(?:professional|work|employment|relevant)?\s*experience|internships?", line, re.I)), None)
+    if start is None:
+        return [], 0, len(terms)
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if re.fullmatch(r"\s*(?:selected\s+)?projects?|education|certifications?(?:\s+&\s+learning)?|additional\s*", lines[i], re.I):
+            end = i
+            break
+    rows = []
+    for raw_line in lines[start + 1:end]:
+        line = raw_line.strip(" \t\u2022-:#")
+        if not line:
+            continue
+        tokens = set(_evidence_tokens(line))
+        matched = [term for term in terms if term in tokens or (len(term) >= 5 and any(token.startswith(term[:5]) for token in tokens))]
+        if matched:
+            rows.append((len(set(matched)), line))
+    rows.sort(key=lambda item: item[0], reverse=True)
+    selected = [line for _, line in rows[:3]]
+    matched_terms = len(set(term for _, line in rows for term in terms if term in _evidence_tokens(line)))
+    alternatives = len(re.findall(r"\bor\b", requirement.casefold()))
+    total_terms = max(1, len(terms) - alternatives)
+    return selected, min(matched_terms, total_terms), total_terms
+
+
 def job_match(source: str, description: str, requirements=None) -> dict[str, Any] | None:
     if not description.strip():
         return None
@@ -549,6 +580,13 @@ def job_match(source: str, description: str, requirements=None) -> dict[str, Any
                 ratio = matched_terms / total_terms
                 status = "met" if ratio >= 0.75 else "partial"
                 reason = f"Matched {matched_terms} of {total_terms} listed technical requirements in the resume."
+        elif not evidence and requirement.category == "experience":
+            fallback, matched_terms, total_terms = _experience_requirement_evidence(source, requirement.requirement)
+            evidence = fallback
+            if matched_terms and total_terms:
+                ratio = matched_terms / total_terms
+                status = "met" if ratio >= 0.75 else "partial"
+                reason = f"Matched {matched_terms} of {total_terms} experience indicators in the resume."
         rows.append({**requirement.model_dump(), "status": status, "evidence": evidence,
                      "reason": reason if evidence else "No supporting resume evidence."})
     if not rows:
@@ -575,7 +613,40 @@ def job_match(source: str, description: str, requirements=None) -> dict[str, Any
             "matched": [r["requirement"] for r in rows if r["status"] == "met"],
             "missing": [r["requirement"] for r in rows if r["status"] != "met"],
             "required_terms_count": len(rows),
-            "note": "Weighted estimate: essential requirements count 3x, preferred requirements count 1x; met=100%, partial=40%, missing=0%. Missing essential requirements cap the score at 59%; partial essential requirements cap it at 79%. This is not a hiring decision or employer ATS score."}
+            "note": "Scoring: essential 3×, preferred 1× · met 100% · partial 40% · missing 0%. Estimate only, not an ATS or hiring decision."}
+
+
+def fallback_job_requirements(description: str) -> list[JobRequirement]:
+    """Create conservative requirements when the model returns none for a supplied JD."""
+    rows = []
+    preferred = False
+    for raw in description.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if re.fullmatch(r"(?:required|requirements|must have)\s*:?", line, re.I):
+            preferred = False
+            continue
+        if re.fullmatch(r"(?:preferred|nice to have|good to have)\s*:?", line, re.I):
+            preferred = True
+            continue
+        line = re.sub(r"^[\u2022*\-\d.)]+\s*", "", line).strip()
+        if len(line) < 8 or re.fullmatch(r"(?:software developer|job description).*", line, re.I):
+            continue
+        lower = line.casefold()
+        if any(word in lower for word in ("bachelor", "master", "degree", "education")):
+            category = "education"
+        elif any(word in lower for word in ("certif", "license")):
+            category = "certifications"
+        elif any(word in lower for word in ("experience", "internship", "build", "develop", "work", "maintain")):
+            category = "experience"
+        elif any(word in lower for word in ("python", "javascript", "react", "fastapi", "flask", "sql", "aws", "linux", "siem", "api", "database", "tools", "framework")):
+            category = "skills"
+        else:
+            category = "responsibilities"
+        rows.append(JobRequirement(requirement=line, jd_evidence=line, category=category,
+                                   essential=not preferred, status="missing", evidence=[], reason="No supporting resume evidence."))
+    return rows[:20]
 
 
 def skill_categories(skills: Any) -> list[dict[str, Any]]:
@@ -653,6 +724,8 @@ def analyze_document(filename: str, raw: bytes, summary_style: str, analysis_lev
         retrieval_method = "full_context"
     result = groq_generate(context, job_description[:12_000], summary_style, analysis_level, selected, strict_json)
     result = verify_evidence(result, source)
+    if job_description.strip() and not result.job_requirements:
+        result.job_requirements = fallback_job_requirements(job_description)
     scores = completeness(result)
     grounded = evidence_coverage(result, source)
     match = job_match(source, job_description, result.job_requirements)

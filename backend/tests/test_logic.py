@@ -5,7 +5,7 @@ from io import BytesIO
 from unittest.mock import patch
 from types import SimpleNamespace
 from fastapi import UploadFile
-from app.main import analyze, chunk_text, completeness, evidence_matches, extract_text, job_match, verify_evidence, skill_categories
+from app.main import analyze, chunk_text, completeness, evidence_matches, extract_text, fallback_job_requirements, job_match, verify_evidence, skill_categories
 from app.schemas import AnalysisResult, JobRequirement
 from app.main import groq_generate, evidence_coverage
 
@@ -212,8 +212,29 @@ class LogicTests(unittest.TestCase):
         self.assertEqual(row["evidence"], ["Languages: Python", "Backend: FastAPI", "Services: REST APIs"])
         self.assertIn("Matched 3 of 3", row["reason"])
 
+    def test_experience_match_recovers_verifiable_work_lines_when_model_quote_is_missing(self):
+        requirement = JobRequirement(
+            requirement="Practical experience building interfaces with React and JavaScript",
+            jd_evidence="Practical experience building interfaces with React and JavaScript",
+            category="experience", status="missing", evidence=[], reason="No evidence returned.",
+        )
+        match = job_match(
+            "EXPERIENCE\nSOFTWARE DEVELOPER INTERN | Northstar\nBuilt React features with JavaScript\nEDUCATION\nBachelor of Engineering",
+            "Required: Practical experience building interfaces with React and JavaScript",
+            [requirement],
+        )
+        row = match["requirements"][0]
+        self.assertEqual(row["status"], "partial")
+        self.assertIn("Built React features with JavaScript", row["evidence"])
+
     def test_job_match_reports_missing_job_description(self):
         self.assertIsNone(job_match("A valid resume with text", ""))
+
+    def test_fallback_job_requirements_preserve_supplied_jd_when_model_returns_none(self):
+        rows = fallback_job_requirements("Required:\n- Python and FastAPI experience\nPreferred:\n- Docker familiarity")
+        self.assertEqual([row.requirement for row in rows], ["Python and FastAPI experience", "Docker familiarity"])
+        self.assertTrue(rows[0].essential)
+        self.assertFalse(rows[1].essential)
 
     def test_empty_focus_defaults_to_all_sections(self):
         from app.main import normalize_focus
