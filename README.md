@@ -36,10 +36,47 @@ Exact dependency declarations are in `frontend/package.json`, `backend/requireme
 | `sentence-transformers/all-MiniLM-L6-v2` | Optional local embedding model for semantic retrieval |
 | Cloudflare Workers AI / `@cf/black-forest-labs/flux-1-schnell` | Optional decorative skills artwork |
 
-```text
-React upload -> FastAPI -> PDF/TXT text extraction -> text validation
-    -> chunking and retrieval -> Groq generation -> Pydantic validation
-    -> source-evidence checks and metrics -> React report -> browser history
+```mermaid
+flowchart TD
+    A[React interface: resume, optional job description, analysis settings]
+    A --> B[Fetch + FormData: multipart upload]
+    A --> IDB[(IndexedDB: original resume files)]
+
+    subgraph Backend[Python backend: FastAPI + Uvicorn]
+        B --> C[Validate upload size and analysis options]
+        C --> D[Thread pool: document processing and provider calls]
+        D --> E{Document format}
+        E -->|PDF| F[PyMuPDF: extract page text]
+        E -->|TXT| G[Python: UTF-8 decoding]
+        F --> H[Clean whitespace and validate readable text]
+        G --> H
+        H --> I{RAG enabled?}
+        I -->|Yes: default| J[Chunking: 850 characters, 120-character overlap]
+        J --> K{MiniLM enabled and available?}
+        K -->|No| L[Keyword-overlap ranking]
+        K -->|Yes| M[Sentence Transformers: MiniLM embeddings]
+        M --> N[NumPy: cosine-similarity ranking]
+        N -.->|Embedding failure| L
+        L --> O[Retrieve up to 5 relevant passages]
+        N --> O
+        O --> P[Build prompt: full resume + passages + settings + optional JD]
+        I -->|No| Q[Build prompt: full resume + settings + optional JD]
+        P --> R[Groq SDK: structured generation request]
+        Q --> R
+        R --> S[Normalize JSON + Pydantic schema validation]
+        S -.->|Invalid model output: bounded recovery attempts| R
+        S --> T[Verify quotations against source text]
+        T --> U[Calculate completeness, evidence overlap, job match, skills, readability]
+        U --> V[FastAPI: JSON report response]
+    end
+
+    R <-->|Prompt and generated response| LLM[Groq-hosted openai/gpt-oss-20b]
+    V --> W[React report: summary, fields, evidence, metrics, recommendations]
+    W --> LS[(localStorage: up to 20 reports)]
+    W --> PRINT[Browser print / save as PDF]
+    W -->|User requests skills artwork| IMG[FastAPI skills-image endpoint: HTTPX + cache]
+    IMG <-->|Predefined category names / decorative image| CF[Cloudflare Workers AI: FLUX.1 Schnell]
+    IMG --> W
 ```
 
 - **RAG is enabled by default:** passages target 850 characters with 120-character overlap; up to five relevant passages are selected from at most 100 chunks.
