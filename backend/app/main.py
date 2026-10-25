@@ -350,7 +350,9 @@ def evidence_matches(source: str, quote: str) -> bool:
         return False
     source_text = normalize_evidence(source)
     quote_text = normalize_evidence(quote)
-    if quote_text in source_text:
+    if quote_text == source_text or re.search(
+            r"(?<![a-z0-9])" + re.escape(quote_text) + r"(?![a-z0-9])",
+            source_text):
         return True
     source_tokens = _evidence_tokens(source)
     quote_tokens = _evidence_tokens(quote)
@@ -361,10 +363,19 @@ def evidence_matches(source: str, quote: str) -> bool:
            for index in range(len(source_tokens) - width + 1)):
         return True
     # Some PDF text layers insert spaces inside a single word or email address.
-    compact_source = "".join(source_tokens)
     compact_quote = "".join(quote_tokens)
-    return (len(compact_quote) >= 4 and compact_quote in compact_source
-            and ("@" in quote or len(quote_tokens) == 1))
+    if len(compact_quote) < 4 or ("@" not in quote and len(quote_tokens) != 1
+                                  and not re.search(r"[-\u2010-\u2015]", quote)):
+        return False
+    for start in range(len(source_tokens)):
+        combined = ""
+        for token in source_tokens[start:]:
+            combined += token
+            if combined == compact_quote:
+                return True
+            if len(combined) >= len(compact_quote):
+                break
+    return False
 
 
 def individual_skills(skills: Any) -> list[str]:

@@ -115,6 +115,7 @@ class LogicTests(unittest.TestCase):
         self.assertTrue(evidence_matches(source, "jane@example.com"))
         self.assertTrue(evidence_matches(source, "Software-developer"))
         self.assertTrue(evidence_matches(source, "React.js"))
+        self.assertFalse(evidence_matches("Firstname only", "name"))
         result = AnalysisResult.model_validate({"summary": "Jane is a software developer.", "fields": {
             "name": {"value": "Jane Example", "evidence": ["Jane Example"]},
             "email": {"value": "jane@example.com", "evidence": ["jane@example.com"]},
