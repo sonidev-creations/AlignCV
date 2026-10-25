@@ -1,6 +1,6 @@
 # AlignCV
 
-AlignCV turns resumes into clear, actionable insights, helping candidates highlight their strengths and align their applications with job requirements.
+AlignCV provides evidence-backed resume insights, helping job seekers strengthen their applications and recruiters assess alignment with role requirements.
 
 ## Features
 
