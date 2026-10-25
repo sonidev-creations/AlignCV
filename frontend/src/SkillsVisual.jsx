@@ -3,6 +3,7 @@ import { ArrowUpRight, Download, LoaderCircle, Sparkles, Layers3 } from 'lucide-
 
 const colors=['#38d5b4','#728cff','#bd9bff','#69c4ed','#f1bc73','#a5b4c9'];
 const artworkCache=new Map();
+export function clearSkillsArtworkCache(){artworkCache.clear();}
 const label=category=>category==='Other'?'Additional skills':category;
 export default function SkillsVisual({items,requestJSON,visualGeneration=true}){
  const [selected,setSelected]=useState(null),[artwork,setArtwork]=useState(null),[mode,setMode]=useState('map'),[busy,setBusy]=useState(false),[error,setError]=useState('');

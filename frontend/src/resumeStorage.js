@@ -18,8 +18,16 @@ async function transaction(mode,operation){
  });}finally{db.close();}
 }
 export function saveResume(file){
- const id=JSON.stringify([file.name,file.size,file.lastModified]);
+ const id=resumeKey(file);
  return transaction('readwrite',store=>store.put({id,name:file.name,size:file.size,createdAt:new Date().toISOString(),blob:file}));
 }
+export function resumeKey(file){return JSON.stringify([file.name,file.size,file.lastModified]);}
 export function listResumes(){return transaction('readonly',store=>store.getAll());}
 export function deleteResume(id){return transaction('readwrite',store=>store.delete(id));}
+export function deleteResumesByName(name){
+ return transaction('readwrite',store=>{
+  const request=store.getAll();
+  request.onsuccess=()=>{for(const item of request.result||[])if(item.name===name)store.delete(item.id);};
+  return request;
+ });
+}
