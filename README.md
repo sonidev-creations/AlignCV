@@ -35,6 +35,7 @@ Exact dependency declarations are in `frontend/package.json`, `backend/requireme
 | Service / model | Usage |
 |---|---|
 | Groq API / `openai/gpt-oss-20b` | Default model for structured resume analysis; configurable through `GROQ_MODEL` |
+| Gemini API / `gemini-2.5-flash` | Optional backup only when Groq returns a rate/usage limit (HTTP 429); configurable through `GEMINI_MODEL` |
 | `sentence-transformers/all-MiniLM-L6-v2` | Optional local embedding model for semantic retrieval |
 | Cloudflare Workers AI / `@cf/black-forest-labs/flux-1-schnell` | Optional decorative skills artwork |
 
@@ -103,12 +104,18 @@ Set `ENABLE_MINILM=true` in `backend/.env` and restart the backend. The embeddin
 
 ## Environment variables
 
+Every analysis tries Groq first. When Groq returns HTTP 429 and `GEMINI_API_KEY` is configured, the backend sends the same analysis prompt to Gemini through Google's OpenAI-compatible endpoint. Both providers use the same report schema, validation, evidence checks, and scoring; wording and model judgments can differ. The next analysis tries Groq again automatically. Other Groq errors do not trigger the backup. If both providers are rate limited, the API returns an explicit error.
+
+For an existing Render deployment, open **Dashboard → aligncv-api → Environment → Add Environment Variable**. Add `GEMINI_API_KEY` with your actual key and optionally `GEMINI_MODEL=gemini-2.5-flash`, then choose **Save, rebuild, and deploy** after deploying this code. Keep keys on the backend service; do not add them to frontend variables or commit `.env`. Restart the local backend after editing `backend/.env`.
+
 Create backend variables in `backend/.env` and frontend variables in `frontend/.env`. Keep secret values out of source control and frontend configuration.
 
 | Variable | Location | Requirement / default |
 |---|---|---|
 | `GROQ_API_KEY` | Backend | Required for AI analysis; private credential |
 | `GROQ_MODEL` | Backend | Optional; `openai/gpt-oss-20b` |
+| `GEMINI_API_KEY` | Backend | Optional private credential; enables backup analysis only when Groq returns HTTP 429 |
+| `GEMINI_MODEL` | Backend | Optional; `gemini-2.5-flash` |
 | `FRONTEND_ORIGIN` | Backend | Localhost origins by default; set the exact frontend HTTPS origin in production; comma-separated origins supported |
 | `MAX_UPLOAD_MB` | Backend | Optional; `5`; keep consistent with frontend validation |
 | `ENABLE_MINILM` | Backend | Optional; `false` for lightweight keyword retrieval |

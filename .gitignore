@@ -14,3 +14,7 @@ __pycache__/
 htmlcov/
 *.log
 .vscode/
+
+# Local candidate documents
+/candidate_details.txt
+/P.Soni_Resume.pdf
