@@ -1,0 +1,19 @@
+Software Developer - Sample Job Description
+
+Build responsive web applications and Python APIs as part of a collaborative development team.
+
+Required:
+- Practical experience building interfaces with React, JavaScript, HTML and CSS.
+- Build and integrate REST APIs using Python and FastAPI or Flask.
+- Use SQL and PostgreSQL or MySQL for data storage and queries.
+- Demonstrate relevant work, internship or project experience in full-stack development.
+- Validate API inputs, handle errors and write automated tests.
+- Use Git and pull requests for code review and collaboration.
+- Bachelor's degree in Computer Science or a related field, or equivalent practical experience.
+
+Preferred:
+- Experience deploying applications and working with AWS S3 or Lambda.
+- Familiarity with Docker and CI/CD pipelines.
+- Relevant cloud certifications or completed cloud training.
+
+This fictional job description is provided for testing and can be edited.

@@ -1,0 +1,42 @@
+# Create both services via Render > New > Blueprint.
+# Enter the final HTTPS frontend/API URLs when prompted; secrets stay in Render.
+services:
+  - type: web
+    name: aligncv-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: ENABLE_MINILM
+        value: "false"
+      - key: MAX_UPLOAD_MB
+        value: "5"
+  - type: web
+    name: aligncv-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    envVars:
+      - key: NODE_VERSION
+        value: 22.21.0
+      - key: VITE_API_URL
+        sync: false
