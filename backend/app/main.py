@@ -500,6 +500,35 @@ def evidence_coverage(result: AnalysisResult, source: str) -> dict[str, Any]:
             "note": "Percentage of meaningful summary terms found across verified resume excerpts. Word overlap can miss paraphrases and cannot verify meaning, negation, or factual correctness. Review the excerpts alongside the original resume."}
 
 
+def _requirement_terms(text: str) -> list[str]:
+    stopwords = {"a", "an", "and", "or", "the", "for", "with", "using", "experience", "knowledge", "skills", "skill", "apis", "api", "development", "develop", "build", "building", "maintain", "maintaining"}
+    return list(dict.fromkeys(word for word in _evidence_tokens(text) if len(word) > 2 and word not in stopwords))
+
+
+def _technical_requirement_evidence(source: str, requirement: str) -> tuple[list[str], int, int]:
+    """Find exact source lines for technical requirements without inventing supporting text."""
+    terms = _requirement_terms(requirement)
+    if not terms:
+        return [], 0, 0
+    rows = []
+    for raw_line in source.splitlines():
+        line = raw_line.strip(" \t\u2022-:#")
+        if not line:
+            continue
+        tokens = set(_evidence_tokens(line))
+        matched = [term for term in terms if term in tokens]
+        if matched:
+            rows.append((len(set(matched)), line))
+    rows.sort(key=lambda item: item[0], reverse=True)
+    selected = [line for _, line in rows[:3]]
+    matched_terms = len(set(term for score, line in rows for term in terms if term in _evidence_tokens(line)))
+    # Alternatives such as “FastAPI or Flask” represent one requirement, not two.
+    alternatives = len(re.findall(r"\bor\b", requirement.casefold()))
+    total_terms = max(1, len(terms) - alternatives)
+    matched_terms = min(matched_terms, total_terms)
+    return selected, matched_terms, total_terms
+
+
 def job_match(source: str, description: str, requirements=None) -> dict[str, Any] | None:
     if not description.strip():
         return None
@@ -512,8 +541,16 @@ def job_match(source: str, description: str, requirements=None) -> dict[str, Any
         seen.add(key)
         evidence = [q for q in requirement.evidence if q.strip() and evidence_matches(source, q)]
         status = requirement.status if evidence else "missing"
+        reason = requirement.reason
+        if not evidence and requirement.category == "skills":
+            fallback, matched_terms, total_terms = _technical_requirement_evidence(source, requirement.requirement)
+            evidence = fallback
+            if matched_terms and total_terms:
+                ratio = matched_terms / total_terms
+                status = "met" if ratio >= 0.75 else "partial"
+                reason = f"Matched {matched_terms} of {total_terms} listed technical requirements in the resume."
         rows.append({**requirement.model_dump(), "status": status, "evidence": evidence,
-                     "reason": requirement.reason if evidence else "No supporting resume evidence."})
+                     "reason": reason if evidence else "No supporting resume evidence."})
     if not rows:
         return {"score": None, "verdict": "Comparison unavailable", "requirements": [], "categories": [],
                 "matched": [], "missing": [], "required_terms_count": 0,
@@ -529,15 +566,16 @@ def job_match(source: str, description: str, requirements=None) -> dict[str, Any
         score = min(score, 59)
     elif essential_gaps:
         score = min(score, 79)
+    category_order = ["skills", "experience", "projects", "education", "certifications", "responsibilities"]
     categories = [{"category": category, "score": percentage(items), "count": len(items)}
-                  for category in dict.fromkeys(r["category"] for r in rows)
+                  for category in category_order
                   if (items := [r for r in rows if r["category"] == category])]
     return {"score": score, "verdict": "Strong alignment" if score >= 80 else "Partial alignment" if score >= 50 else "Low alignment",
             "requirements": rows, "categories": categories,
             "matched": [r["requirement"] for r in rows if r["status"] == "met"],
             "missing": [r["requirement"] for r in rows if r["status"] != "met"],
             "required_terms_count": len(rows),
-            "note": "Resume evidence estimate; not a hiring decision or employer ATS score."}
+            "note": "Weighted estimate: essential requirements count 3x, preferred requirements count 1x; met=100%, partial=40%, missing=0%. Missing essential requirements cap the score at 59%; partial essential requirements cap it at 79%. This is not a hiring decision or employer ATS score."}
 
 
 def skill_categories(skills: Any) -> list[dict[str, Any]]:

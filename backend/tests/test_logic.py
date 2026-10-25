@@ -187,6 +187,31 @@ class LogicTests(unittest.TestCase):
         match = job_match("Built FastAPI\nservices", "Required: FastAPI experience", [requirement])
         self.assertEqual(match["score"], 100)
 
+    def test_job_match_categories_use_stable_display_order(self):
+        rows = [
+            JobRequirement(requirement="Responsibilities", jd_evidence="Responsibilities", category="responsibilities", status="met", evidence=["Responsibilities"], reason="Present."),
+            JobRequirement(requirement="Python", jd_evidence="Python", category="skills", status="met", evidence=["Python"], reason="Present."),
+            JobRequirement(requirement="Experience", jd_evidence="Experience", category="experience", status="met", evidence=["Experience"], reason="Present."),
+        ]
+        categories = job_match("Python Experience Responsibilities", "Python Experience Responsibilities", rows)["categories"]
+        self.assertEqual([item["category"] for item in categories], ["skills", "experience", "responsibilities"])
+
+    def test_skill_match_recovers_verifiable_source_lines_when_model_quote_is_missing(self):
+        requirement = JobRequirement(
+            requirement="Python, FastAPI or Flask, and REST APIs",
+            jd_evidence="Python, FastAPI or Flask, and REST APIs",
+            category="skills", status="missing", evidence=[], reason="No evidence returned.",
+        )
+        match = job_match(
+            "Languages: Python\nBackend: FastAPI\nServices: REST APIs",
+            "Required: Python, FastAPI or Flask, and REST APIs",
+            [requirement],
+        )
+        row = match["requirements"][0]
+        self.assertEqual(row["status"], "met")
+        self.assertEqual(row["evidence"], ["Languages: Python", "Backend: FastAPI", "Services: REST APIs"])
+        self.assertIn("Matched 3 of 3", row["reason"])
+
     def test_job_match_reports_missing_job_description(self):
         self.assertIsNone(job_match("A valid resume with text", ""))
 
