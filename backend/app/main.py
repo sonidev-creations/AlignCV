@@ -330,7 +330,41 @@ RESUME EVIDENCE:\n{context}\n\nJOB DESCRIPTION (user-provided, may be empty):\n{
 
 
 def normalize_evidence(text: str) -> str:
-    return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+    text = unicodedata.normalize("NFKC", text or "").casefold().replace("\u00ad", "")
+    # PDF extractors may split a word at a line ending (for example, "soft-\nware").
+    text = re.sub(r"(?<=[a-z])[-\u2010-\u2015]\s*\n\s*(?=[a-z])", "", text)
+    return " ".join(text.split())
+
+
+def _evidence_tokens(text: str) -> list[str]:
+    """Return comparable word atoms while ignoring PDF whitespace and punctuation layout."""
+    normalized = normalize_evidence(text)
+    return [re.sub(r"[^a-z0-9]", "", token)
+            for token in re.findall(r"[a-z0-9]+(?:[+#][a-z0-9]+)*", normalized)
+            if re.sub(r"[^a-z0-9]", "", token)]
+
+
+def evidence_matches(source: str, quote: str) -> bool:
+    """Match an excerpt despite PDF line breaks, spacing, or punctuation differences."""
+    if not normalize_evidence(quote):
+        return False
+    source_text = normalize_evidence(source)
+    quote_text = normalize_evidence(quote)
+    if quote_text in source_text:
+        return True
+    source_tokens = _evidence_tokens(source)
+    quote_tokens = _evidence_tokens(quote)
+    if not quote_tokens or len(quote_tokens) > len(source_tokens):
+        return False
+    width = len(quote_tokens)
+    if any(source_tokens[index:index + width] == quote_tokens
+           for index in range(len(source_tokens) - width + 1)):
+        return True
+    # Some PDF text layers insert spaces inside a single word or email address.
+    compact_source = "".join(source_tokens)
+    compact_quote = "".join(quote_tokens)
+    return (len(compact_quote) >= 4 and compact_quote in compact_source
+            and ("@" in quote or len(quote_tokens) == 1))
 
 
 def individual_skills(skills: Any) -> list[str]:
@@ -349,10 +383,9 @@ def individual_skills(skills: Any) -> list[str]:
 
 
 def verify_evidence(result: AnalysisResult, source: str) -> AnalysisResult:
-    source_lower = normalize_evidence(source)
     for field_name in ["name", "email", "skills", "education", "experience"]:
         item: EvidenceField = getattr(result.fields, field_name)
-        verified = [quote.strip() for quote in item.evidence if quote.strip() and normalize_evidence(quote) in source_lower]
+        verified = [quote.strip() for quote in item.evidence if quote.strip() and evidence_matches(source, quote)]
         item.evidence = verified[:5]
         empty = item.value is None or (isinstance(item.value, str) and not item.value.strip()) or (isinstance(item.value, list) and not any(v.strip() for v in item.value))
         if empty:
@@ -379,7 +412,7 @@ def ats_readability(source: str, result: AnalysisResult) -> dict[str, Any]:
         valid = field.value is not None and field.status == "supported"
         if key == "email" and valid:
             values = field.value if isinstance(field.value, list) else [field.value]
-            valid = any(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value.strip()) and value.casefold() in source.casefold() for value in values)
+            valid = any(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value.strip()) and evidence_matches(source, value) for value in values)
         checks.append({"label": label, "status": "pass" if valid else "review",
                        "detail": "Found with source evidence." if valid else f"Make your {label.lower()} easy to find as plain text."})
     headings = {
@@ -431,9 +464,8 @@ def evidence_coverage(result: AnalysisResult, source: str) -> dict[str, Any]:
         return {word[:-1] if word.endswith('s') and not word.endswith(('ss', 'is')) and len(word) > 3 else word
                 for word in words if word not in stopwords and len(word) > 1}
 
-    normalized_source = normalize_evidence(source)
     quotes = list(dict.fromkeys(q for field in result.fields.model_dump().values()
-                               for q in field['evidence'] if q.strip() and normalize_evidence(q) in normalized_source))
+                               for q in field['evidence'] if q.strip() and evidence_matches(source, q)))
     quote_terms = [(quote, terms(quote)) for quote in quotes]
     available = set().union(*(tokens for _, tokens in quote_terms)) if quote_terms else set()
     sentences = [s.strip(' \t\u2022-') for s in re.split(r"(?<=[.!?])\s+|\n+", result.summary) if s.strip()]
@@ -462,14 +494,12 @@ def job_match(source: str, description: str, requirements=None) -> dict[str, Any
         return None
     rows = []
     seen = set()
-    normalized_source = normalize_evidence(source)
-    normalized_description = normalize_evidence(description)
     for requirement in requirements or []:
         key = normalize_evidence(requirement.requirement)
-        if key in seen or normalize_evidence(requirement.jd_evidence) not in normalized_description:
+        if key in seen or not evidence_matches(description, requirement.jd_evidence):
             continue
         seen.add(key)
-        evidence = [q for q in requirement.evidence if q.strip() and normalize_evidence(q) in normalized_source]
+        evidence = [q for q in requirement.evidence if q.strip() and evidence_matches(source, q)]
         status = requirement.status if evidence else "missing"
         rows.append({**requirement.model_dump(), "status": status, "evidence": evidence,
                      "reason": requirement.reason if evidence else "No supporting resume evidence."})

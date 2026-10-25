@@ -5,7 +5,7 @@ from io import BytesIO
 from unittest.mock import patch
 from types import SimpleNamespace
 from fastapi import UploadFile
-from app.main import analyze, chunk_text, completeness, extract_text, job_match, verify_evidence, skill_categories
+from app.main import analyze, chunk_text, completeness, evidence_matches, extract_text, job_match, verify_evidence, skill_categories
 from app.schemas import AnalysisResult, JobRequirement
 from app.main import groq_generate, evidence_coverage
 
@@ -109,6 +109,30 @@ class LogicTests(unittest.TestCase):
         result = verify_evidence(result, "B.Tech\n  Information\u00a0Technology")
         self.assertEqual(result.fields.education.status, "supported")
 
+    def test_pdf_formatting_variations_keep_valid_evidence(self):
+        source = "Jane\nExample\n j ane@example.com\nSoftware-\ndeveloper\nReact.js"
+        self.assertTrue(evidence_matches(source, "Jane Example"))
+        self.assertTrue(evidence_matches(source, "jane@example.com"))
+        self.assertTrue(evidence_matches(source, "Software-developer"))
+        self.assertTrue(evidence_matches(source, "React.js"))
+        result = AnalysisResult.model_validate({"summary": "Jane is a software developer.", "fields": {
+            "name": {"value": "Jane Example", "evidence": ["Jane Example"]},
+            "email": {"value": "jane@example.com", "evidence": ["jane@example.com"]},
+            "experience": {"value": "Software-developer", "evidence": ["Software-developer"]}}})
+        result = verify_evidence(result, source)
+        self.assertEqual(result.fields.name.status, "supported")
+        self.assertEqual(result.fields.email.status, "supported")
+        self.assertEqual(result.fields.experience.status, "supported")
+
+    def test_different_resume_formats_are_verified_independently(self):
+        first = AnalysisResult(summary="First", fields={"name": {"value": "Asha Rao", "evidence": ["Asha Rao"]}})
+        second = AnalysisResult(summary="Second", fields={"name": {"value": "Ben Lee", "evidence": ["Ben Lee"]}})
+        first = verify_evidence(first, "Asha Rao\nPython developer")
+        second = verify_evidence(second, "Ben Lee\nJava developer")
+        self.assertEqual(first.fields.name.status, "supported")
+        self.assertEqual(second.fields.name.status, "supported")
+        self.assertIsNone(verify_evidence(first, "Ben Lee\nJava developer").fields.name.value)
+
     def test_grouped_skills_are_counted_individually(self):
         counts = {x["category"]: x["count"] for x in skill_categories("AI & ML: RAG, NLP; Programming: Python, JavaScript; Web: Flask, React")}
         self.assertEqual(counts, {"AI & LLM": 2, "Programming": 2, "Web & APIs": 2})
@@ -156,6 +180,14 @@ class LogicTests(unittest.TestCase):
         self.assertEqual(match["score"], 70)
         self.assertEqual(len(match["categories"]), 2)
         self.assertIsNone(job_match("resume", ""))
+
+    def test_job_match_accepts_formatted_job_description_evidence(self):
+        requirement = JobRequirement(requirement="FastAPI experience", jd_evidence="FastAPI\nexperience", category="experience", status="met", evidence=["FastAPI\nservices"], reason="Relevant API work.")
+        match = job_match("Built FastAPI\nservices", "Required: FastAPI experience", [requirement])
+        self.assertEqual(match["score"], 100)
+
+    def test_job_match_reports_missing_job_description(self):
+        self.assertIsNone(job_match("A valid resume with text", ""))
 
     def test_empty_focus_defaults_to_all_sections(self):
         from app.main import normalize_focus
