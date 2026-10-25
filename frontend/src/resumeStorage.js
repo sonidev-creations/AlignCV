@@ -1,9 +1,17 @@
 const DB_NAME = 'aligncv-resumes';
 function database() {
  return new Promise((resolve,reject)=>{
-  const request=indexedDB.open(DB_NAME,1);
-  request.onupgradeneeded=()=>request.result.createObjectStore('files',{keyPath:'id'});
-  request.onsuccess=()=>resolve(request.result);
+  const request=indexedDB.open(DB_NAME,2);
+  request.onupgradeneeded=event=>{
+   if(event.oldVersion===0)request.result.createObjectStore('files',{keyPath:'id'});
+   else request.transaction.objectStore('files').clear();
+  };
+  request.onsuccess=()=>{
+   const db=request.result;
+   db.onversionchange=()=>db.close();
+   resolve(db);
+  };
+  request.onblocked=()=>reject(new Error('Close other AlignCV tabs and reload to clear old resumes.'));
   request.onerror=()=>reject(request.error);
  });
 }

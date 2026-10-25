@@ -188,7 +188,7 @@ No database service is required. Keep `.env`, `.venv`, `node_modules`, and `dist
 - PDF/TXT only; OCR for scanned PDFs and DOCX support are not implemented.
 - Extracted resume text is limited to 100,000 characters; job descriptions are truncated to 12,000 characters.
 - No user authentication, per-user provider quotas, or server-side history synchronization.
-- Up to 20 reports are stored in localStorage; original documents are stored separately in IndexedDB. Clearing browser site data removes them.
+- Up to 20 reports are stored in localStorage; original documents are stored separately in IndexedDB. The storage v2 update clears previous reports and uploaded resumes once, when each browser next opens the app. New uploads and reports are retained. Clearing browser site data removes them.
 - The API processes uploads in memory; resume text and supplied job descriptions are sent to Groq for analysis.
 - RAG includes the full resume and adds passages, so it does not reduce prompt token usage in this implementation.
 - Provider availability, quotas, and network errors can interrupt analysis; MiniLM adds model-download and memory costs.

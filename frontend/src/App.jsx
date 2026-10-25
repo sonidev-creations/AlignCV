@@ -109,8 +109,9 @@ function CalculatedMetrics(){
  ];
  return <section className="page metrics-page"><div className="history-heading"><h1>Calculated metrics</h1></div><div className="metrics-grid">{metrics.map(([title,points])=><article className="result-card" key={title}><h2>{title}</h2><ul>{points.map(point=><li key={point}>{point}</li>)}</ul></article>)}</div></section>;
 }
-const HISTORY_KEY='aligncv.report-history.v1';
+const HISTORY_KEY='aligncv.report-history.v2';
 function readHistory(){
+ try{localStorage.removeItem('aligncv.report-history.v1')}catch{ /* Storage may be blocked. */ }
  try{const saved=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]');return Array.isArray(saved)?saved.filter(item=>typeof item?.id==='string'&&typeof item?.createdAt==='string'&&typeof item?.report?.filename==='string'&&item.report.fields&&typeof item.report.summary==='string').slice(0,20):[]}catch{return []}
 }
 function ResumePreview({resume,onClose}){
