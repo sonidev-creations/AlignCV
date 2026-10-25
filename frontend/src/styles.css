@@ -146,6 +146,8 @@ button:focus-visible,textarea:focus-visible{outline-color:#507bb4}
 
 .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:18px}.metrics-grid h2{font-size:17px;margin:0 0 14px}.metrics-grid ul{padding-left:20px;margin:0;color:#52627b;font-size:13px;line-height:1.8}.metrics-grid li+li{margin-top:8px}
 
+@media(max-width:600px){.system-popover{left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom));width:auto;max-height:calc(100vh - 140px);overflow-y:auto;padding:14px;border-radius:16px}.system-popover dl>div{font-size:12px;gap:10px}.system-popover .ai-settings b{font-size:12px}.system-popover .ai-settings small{font-size:10px}}
+
 .skill-chart-category{cursor:pointer;outline:none}.skill-chart-category:hover>rect:first-child{fill:#e4ecff}.skill-chart-category:focus-visible>rect:first-child{stroke:#4965e8;stroke-width:2}.selected-skills{margin-top:16px;padding:14px;background:#f7f9fd;border-radius:12px}.selected-skills-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.selected-skills-heading h3{margin:0;font-size:14px}
 
 .completeness-feedback .completeness-checks{gap:6px;margin-top:14px}.completeness-feedback .completeness-check{padding:8px 12px}.completeness-feedback .completeness-check b{font-size:12px}
