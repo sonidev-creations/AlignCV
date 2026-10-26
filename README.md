@@ -109,6 +109,7 @@ Create backend variables in `backend/.env` and frontend variables in `frontend/.
 |---|---|---|
 | `GROQ_API_KEY` | Backend | Required for AI analysis; private credential |
 | `GROQ_MODEL` | Backend | Optional; `openai/gpt-oss-20b` |
+| `GROQ_REQUEST_TOKEN_BUDGET` | Backend | Optional; `7000`; estimated input plus reserved output per call, including a 512-token margin. Set below your account/model limit. |
 | `FRONTEND_ORIGIN` | Backend | Localhost origins by default; set the exact frontend HTTPS origin in production; comma-separated origins supported |
 | `MAX_UPLOAD_MB` | Backend | Optional; `5`; keep consistent with frontend validation |
 | `ENABLE_MINILM` | Backend | Optional; `false` for lightweight keyword retrieval |
@@ -131,7 +132,7 @@ From `backend`:
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-The suite contains **58 tests** covering extraction, chunking, retrieval, evidence checks, scoring, JSON recovery, API behavior, and artwork caching/validation. Provider calls are mocked; these tests do not verify live credentials or quotas. Regression cases cover experience section boundaries, unavailable comparisons, skill hallucinations, C/C++/C# distinctions, gender-neutral output, and explicit rate-limit errors.
+The suite contains **68 tests** covering extraction, chunking, retrieval, evidence checks, scoring, JSON recovery, API behavior, and artwork caching/validation. Provider calls are mocked; these tests do not verify live credentials or quotas. Regression cases cover experience section boundaries, unavailable comparisons, skill hallucinations, C/C++/C# distinctions, gender-neutral output, and explicit rate-limit errors.
 
 From `frontend`, with `VITE_API_URL` configured:
 
@@ -190,7 +191,7 @@ No database service is required. Keep `.env`, `.venv`, `node_modules`, and `dist
 - No user authentication, per-user provider quotas, or server-side history synchronization.
 - Up to 20 reports are stored in localStorage; original documents are stored separately in IndexedDB. The storage v2 update clears previous reports and uploaded resumes once, when each browser next opens the app. New uploads and reports are retained. Clearing browser site data removes them.
 - The API processes uploads in memory; resume text and supplied job descriptions are sent to Groq for analysis.
-- RAG includes the full resume and adds passages, so it does not reduce prompt token usage in this implementation.
+- Analysis preserves the full resume and job description, compacts layout whitespace, and avoids duplicate excerpts/schema. Input tokens are estimated from UTF-8 bytes, not counted by a model tokenizer; unusual text may exceed the estimate. Oversized requests are blocked locally. Groq is the sole analysis provider; 429 errors retain Retry-After and are not automatically retried. Organization-wide usage can still exhaust Groq quotas. Truncated output is discarded rather than presented as complete.
 - Provider availability, quotas, and network errors can interrupt analysis; MiniLM adds model-download and memory costs.
 - Readability checks do not validate visual layout or compatibility with a specific employer parser.
 - Protect provider-backed endpoints with authentication and quotas before exposing them to unrestricted public use.

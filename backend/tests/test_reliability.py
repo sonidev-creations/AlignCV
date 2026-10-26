@@ -97,7 +97,7 @@ class ReliabilityTests(unittest.TestCase):
     def test_rate_limits_remain_explicit_errors_with_retry_header(self):
         response = httpx.Response(429, headers={"retry-after": "30"},
                                   request=httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions"))
-        with patch.dict("os.environ", {"GROQ_API_KEY": "test-key", "GEMINI_API_KEY": ""}), patch("app.main.Groq") as client:
+        with patch.dict("os.environ", {"GROQ_API_KEY": "test-key"}), patch("app.main.Groq") as client:
             client.return_value.chat.completions.create.side_effect = RateLimitError("Limit", response=response, body={})
             with self.assertRaises(HTTPException) as raised:
                 groq_generate("Python", "", "brief", "standard", [])
